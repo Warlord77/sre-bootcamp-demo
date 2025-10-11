@@ -1,0 +1,15 @@
+flask
+prometheus-client
+
+# OpenTelemetry core
+opentelemetry-api
+opentelemetry-sdk
+
+# OpenTelemetry exporters
+opentelemetry-exporter-prometheus
+opentelemetry-exporter-jaeger
+
+# Instrumentation
+opentelemetry-instrumentation
+opentelemetry-instrumentation-flask
+opentelemetry-instrumentation-requests
