@@ -3,6 +3,7 @@ import sqlite3
 from werkzeug.exceptions import HTTPException
 
 # --- OTEL Imports ---
+import opentelemetry
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
@@ -99,4 +100,4 @@ def metrics_endpoint():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)

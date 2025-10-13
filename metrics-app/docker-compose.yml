@@ -5,7 +5,7 @@ services:
     build: .
     container_name: flask-todo
     ports:
-      - "8000:5000"
+      - "8000:8000"
 
   prometheus:
     image: prom/prometheus:latest
