@@ -1,5 +1,4 @@
 #!/bin/bash
-
 BASE_URL="http://localhost:8000"
 
 echo "🚀 Generating load for Flask ToDo app..."
@@ -32,16 +31,22 @@ for i in {6..8}; do
   sleep 0.2
 done
 
-# Trigger some errors (invalid endpoint = 404, should log warnings)
+# Trigger 404s
 for i in {1..3}; do
   curl -s "$BASE_URL/invalid-endpoint" > /dev/null
   sleep 0.2
 done
 
-# Trigger DB error by updating invalid task ID
+# Trigger 404 (invalid ID)
 curl -s -X PUT "$BASE_URL/tasks/9999" \
      -H "Content-Type: application/json" \
      -d '{"done": true}' > /dev/null
 
 echo "✅ Load generation complete."
-echo "👉 Check Grafana Loki datasource for logs from container {container=\"flask-todo\"}"
+echo ""
+echo "📊 View logs in Grafana:"
+echo "   1. Go to http://localhost:3000"
+echo "   2. Login: admin / admin"
+echo "   3. Click Explore (compass icon)"
+echo "   4. Select 'Loki' datasource"
+echo "   5. Query: {container=\"flask-todo\"}"

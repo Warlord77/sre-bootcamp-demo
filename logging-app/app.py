@@ -1,126 +1,139 @@
-from flask import Flask, jsonify, request
-from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from flask import Flask, request, jsonify
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import logging
-import json
-import os
-import requests
-from datetime import datetime
+import time
 
 app = Flask(__name__)
 
-# -----------------------------
-# In-memory task storage
-# -----------------------------
-tasks = []
-next_id = 1
+# Configure logging to stdout (Docker will capture it)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# -----------------------------
+# Simple in-memory task storage
+tasks = {}
+
 # Prometheus Metrics
-# -----------------------------
-REQUEST_COUNT = Counter("http_requests_total", "Total HTTP Requests", ["method", "endpoint", "status"])
-TASKS_TOTAL = Gauge("tasks_total", "Total number of tasks")
-
-# -----------------------------
-# VictoriaLogs Configuration
-# -----------------------------
-VICTORIA_ACCOUNT_ID = os.getenv("VICTORIA_ACCOUNT_ID", "0")
-VICTORIA_PROJECT_ID = os.getenv("VICTORIA_PROJECT_ID", "0")
-
-# Path-based partition URL
-VICTORIA_LOGS_URL = (
-    f"http://victorialogs:9428/insert/{VICTORIA_ACCOUNT_ID}/{VICTORIA_PROJECT_ID}/jsonline"
-    "?_time_field=@timestamp&_msg_field=message&_stream_fields=service"
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP Requests",
+    ["method", "endpoint", "http_status"],
+)
+REQUEST_LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "Request latency (seconds)",
+    ["endpoint"],
 )
 
-# -----------------------------
-# Custom Logging to VictoriaLogs
-# -----------------------------
-class VictoriaLogsHandler(logging.Handler):
-    def emit(self, record):
-        try:
-            log_entry = self.format(record) + "\n"
-            headers = {"Content-Type": "application/stream+json"}
-            # Send non-blocking, lightweight log insert
-            requests.post(VICTORIA_LOGS_URL, data=log_entry.encode("utf-8"), headers=headers, timeout=1)
-        except Exception:
-            pass  # Avoid crashing on log errors
+@app.route("/tasks", methods=["GET", "POST"])
+def task_list():
+    start_time = time.time()
+    method = request.method
+    endpoint = "/tasks"
+    status = 200
 
-class JSONFormatter(logging.Formatter):
-    def format(self, record):
-        log = {
-            "@timestamp": datetime.utcnow().isoformat() + "Z",
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "logger": record.name,
-            "service": "flask-todo",
-        }
-        if hasattr(record, "args") and isinstance(record.args, dict):
-            log.update(record.args)
-        if record.exc_info:
-            log["exception"] = self.formatException(record.exc_info)
-        return json.dumps(log)
+    try:
+        if method == "GET":
+            logger.info(f"Fetching all tasks, count: {len(tasks)}")
+            resp = jsonify(list(tasks.values()))
+            status = 200
+        elif method == "POST":
+            data = request.get_json()
+            if not data or "task" not in data:
+                status = 400
+                logger.error("Missing 'task' field in POST request")
+                REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+                return jsonify({"error": "Missing 'task' field"}), 400
+            
+            task_id = len(tasks) + 1
+            tasks[task_id] = {"id": task_id, "task": data["task"], "done": False}
+            logger.info(f"Created task {task_id}: {data['task']}")
+            resp = jsonify(tasks[task_id])
+            status = 201
+        
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+        REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.time() - start_time)
+        resp.status_code = status
+        return resp
 
-# Setup logger
-logger = logging.getLogger("flask-todo")
-logger.setLevel(logging.INFO)
-vl_handler = VictoriaLogsHandler()
-vl_handler.setFormatter(JSONFormatter())
-logger.addHandler(vl_handler)
+    except Exception as e:
+        status = 500
+        logger.error(f"Error in {method} {endpoint}: {str(e)}")
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+        REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.time() - start_time)
+        return jsonify({"error": "Internal Server Error"}), 500
 
-# -----------------------------
-# Flask Routes
-# -----------------------------
+@app.route("/tasks/<int:task_id>", methods=["PUT", "DELETE"])
+def task_modify(task_id):
+    start_time = time.time()
+    method = request.method
+    endpoint = "/tasks/id"
+    status = 200
+
+    try:
+        if task_id not in tasks:
+            status = 404
+            logger.warning(f"Task {task_id} not found")
+            REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+            REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.time() - start_time)
+            return jsonify({"error": "Task not found"}), 404
+
+        if method == "PUT":
+            data = request.get_json()
+            if not data or "done" not in data:
+                status = 400
+                logger.error(f"Missing 'done' field in PUT request for task {task_id}")
+                REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+                REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.time() - start_time)
+                return jsonify({"error": "Missing 'done' field"}), 400
+            
+            tasks[task_id]["done"] = data["done"]
+            logger.info(f"Updated task {task_id}: done={data['done']}")
+            resp = jsonify(tasks[task_id])
+            status = 200
+
+        elif method == "DELETE":
+            deleted_task = tasks[task_id]["task"]
+            del tasks[task_id]
+            logger.info(f"Deleted task {task_id}: {deleted_task}")
+            resp = jsonify({"message": "Task deleted"})
+            status = 200
+
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+        REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.time() - start_time)
+        resp.status_code = status
+        return resp
+
+    except Exception as e:
+        status = 500
+        logger.error(f"Error in {method} /tasks/{task_id}: {str(e)}")
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+        REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.time() - start_time)
+        return jsonify({"error": "Internal Server Error"}), 500
+
 @app.route("/metrics")
-def metrics_endpoint():
+def metrics():
+    logger.info("Metrics endpoint accessed")
     return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
-@app.route("/tasks", methods=["GET"])
-def get_tasks():
-    REQUEST_COUNT.labels("GET", "/tasks", 200).inc()
-    logger.info("Fetched all tasks", extra={"count": len(tasks)})
-    return jsonify(tasks)
-
-@app.route("/tasks", methods=["POST"])
-def create_task():
-    global next_id
-    data = request.get_json(force=True)
-    task = {"id": next_id, "task": data["task"], "done": False}
-    tasks.append(task)
-    next_id += 1
-    TASKS_TOTAL.set(len(tasks))
-    REQUEST_COUNT.labels("POST", "/tasks", 201).inc()
-    logger.info("Created task", extra={"task_id": task["id"], "task": task["task"]})
-    return jsonify(task), 201
-
-@app.route("/tasks/<int:task_id>", methods=["PUT"])
-def update_task(task_id):
-    task = next((t for t in tasks if t["id"] == task_id), None)
-    if not task:
-        REQUEST_COUNT.labels("PUT", "/tasks/<id>", 404).inc()
-        logger.warning("Task not found", extra={"task_id": task_id})
-        return jsonify({"error": "Task not found"}), 404
-    task["done"] = request.get_json(force=True).get("done", task["done"])
-    REQUEST_COUNT.labels("PUT", "/tasks/<id>", 200).inc()
-    logger.info("Updated task", extra={"task_id": task_id, "done": task["done"]})
-    return jsonify(task)
-
-@app.route("/tasks/<int:task_id>", methods=["DELETE"])
-def delete_task(task_id):
-    global tasks
-    tasks = [t for t in tasks if t["id"] != task_id]
-    TASKS_TOTAL.set(len(tasks))
-    REQUEST_COUNT.labels("DELETE", "/tasks/<id>", 200).inc()
-    logger.info("Deleted task", extra={"task_id": task_id})
-    return jsonify({"result": "Deleted"})
+@app.route("/")
+def index():
+    logger.info("Root endpoint accessed")
+    return jsonify({"message": "Flask ToDo App with Prometheus + Loki"})
 
 @app.errorhandler(404)
-def not_found(e):
-    REQUEST_COUNT.labels(request.method, "unknown", 404).inc()
-    logger.warning("404 Not Found", extra={"path": request.path})
-    return jsonify({"error": "Not Found"}), 404
+def not_found(error):
+    logger.warning(f"404 error: {request.path}")
+    return jsonify({"error": "Not found"}), 404
 
-# -----------------------------
-# Run App
-# -----------------------------
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"500 error: {str(error)}")
+    return jsonify({"error": "Internal server error"}), 500
+
+
 if __name__ == "__main__":
+    logger.info("Starting Flask ToDo App on port 5000...")
     app.run(host="0.0.0.0", port=5000)
