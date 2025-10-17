@@ -1,0 +1,21 @@
+# Flask Web Framework
+flask
+werkzeug
+
+# OpenTelemetry Core
+opentelemetry-api
+opentelemetry-sdk
+
+# OpenTelemetry OTLP Exporters (gRPC)
+opentelemetry-exporter-otlp-proto-grpc
+
+# OpenTelemetry Instrumentation
+opentelemetry-instrumentation
+opentelemetry-instrumentation-flask
+
+# gRPC dependencies (required for OTLP gRPC exporter)
+grpcio
+protobuf
+
+# Additional dependencies that may be needed
+requests

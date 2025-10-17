@@ -1,0 +1,33 @@
+version: "3"
+
+services:
+  flask-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flask-todo
+    hostname: flask-todo
+    ports:
+      - "8000:5000"
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    networks:
+      - signoz-net
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: 50m
+        max-file: "3"
+    # Add health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  signoz-net:
+    name: signoz-net
+    external: true

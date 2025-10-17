@@ -1,7 +1,25 @@
+---
+# ============================================
+# prometheus.yml - Metrics Scraping Config
+# ============================================
 global:
   scrape_interval: 5s
+  evaluation_interval: 5s
+  external_labels:
+    cluster: 'local'
+    environment: 'production'
 
 scrape_configs:
   - job_name: "flask-todo"
     static_configs:
       - targets: ["app:5000"]
+        labels:
+          service: "flask-todo"
+          environment: "production"
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 4s
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

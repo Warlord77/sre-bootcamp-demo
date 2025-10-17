@@ -1,15 +1,14 @@
 flask
 prometheus-client
 
-# OpenTelemetry core
+# OpenTelemetry Core
 opentelemetry-api
 opentelemetry-sdk
 
-# OpenTelemetry exporters
+# Exporters - CORRECT package name
 opentelemetry-exporter-prometheus
-opentelemetry-exporter-jaeger
+opentelemetry-exporter-otlp
 
 # Instrumentation
 opentelemetry-instrumentation
 opentelemetry-instrumentation-flask
-opentelemetry-instrumentation-requests
