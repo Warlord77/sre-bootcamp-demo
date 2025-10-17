@@ -1,0 +1,14 @@
+flask
+prometheus-client
+requests
+# OpenTelemetry Core
+opentelemetry-api
+opentelemetry-sdk
+
+# Exporters - CORRECT package name
+opentelemetry-exporter-prometheus
+opentelemetry-exporter-otlp
+
+# Instrumentation
+opentelemetry-instrumentation
+opentelemetry-instrumentation-flask

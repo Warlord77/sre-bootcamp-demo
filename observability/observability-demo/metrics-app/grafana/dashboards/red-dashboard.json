@@ -1,0 +1,42 @@
+{
+  "title": "Flask ToDo RED Metrics",
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Request Rate (RPS)",
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_duration_seconds_count[1m]))",
+          "legendFormat": "RPS"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (5xx per second)",
+      "targets": [
+        {
+          "expr": "sum(rate(http_5xx_requests_total[1m]))",
+          "legendFormat": "5xx Errors"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Duration (95th Percentile)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 latency"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 6 }
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s"
+}

@@ -1,0 +1,14 @@
+flask
+werkzeug
+prometheus-client
+
+# OpenTelemetry core & SDK
+opentelemetry-api
+opentelemetry-sdk
+
+# OpenTelemetry metrics & exporter
+opentelemetry-exporter-prometheus
+#opentelemetry-sdk-metrics
+
+# Instrumentation
+opentelemetry-instrumentation-flask
